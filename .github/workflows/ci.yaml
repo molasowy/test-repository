@@ -1,12 +1,12 @@
-name: Run CI on GitHub actions runner 		# nazwa workflow
+name: Run CI on GitHub actions runner
 
-on: [push, workflow_dispatch] 									# eventy, na które reaguje workflow
+on: [push, workflow_dispatch]
 
 jobs:
  ci:
-   name: CI										# nazwa akcji
+   name: CI
    runs-on: ubuntu-latest
-   steps:											# definicje kroków
+   steps:
      - name: Checkout the latest Git commit
        uses: actions/checkout@v2
        with:
