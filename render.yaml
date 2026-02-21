@@ -1,16 +1,13 @@
 services:
   - type: web
     name: spring-boot-backend
-    env: java
+    runtime: docker
     plan: starter
     region: frankfurt
     autoDeploy: false
 
-    buildCommand: ./gradlew clean build -x test
-    startCommand: java -jar build/libs/*.jar
+    dockerfilePath: ./Dockerfile
 
     envVars:
-      - key: JAVA_VERSION
-        value: 17
       - key: SPRING_PROFILES_ACTIVE
         value: prod
