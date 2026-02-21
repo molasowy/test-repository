@@ -6,7 +6,6 @@ COPY gradle/ ./gradle/
 RUN chmod +x ./gradlew
 
 COPY src/ ./src/
-RUN ./gradlew clean build -x test
 
-FROM eclipse-temurin:17-jre
-WORKDIR /app
+# Ensure we produce the runnable Spring Boot jar
+RUN ./gradlew clean bootJar -x test
