@@ -5,9 +5,7 @@ services:
     plan: starter
     region: frankfurt
     autoDeploy: false
-
     dockerfilePath: ./Dockerfile
-
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
