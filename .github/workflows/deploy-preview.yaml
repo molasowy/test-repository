@@ -1,0 +1,130 @@
+name: deploy-preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  deploy_and_verify:
+    name: Deploy and verify preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Find Render preview service for this PR
+        id: render_service
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TIMEOUT_SECONDS: "300"
+          SLEEP_SECONDS: "15"
+        run: |
+          set -euo pipefail
+          end=$((SECONDS + TIMEOUT_SECONDS))
+          SERVICE_ID=""
+
+          while [ $SECONDS -lt $end ]; do
+            RESPONSE=$(curl -fsSL \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              "https://api.render.com/v1/services?limit=50")
+
+            echo "Searching for service matching PR #${PR_NUMBER}..."
+            echo "API response: $RESPONSE"
+
+            SERVICE_ID=$(echo "$RESPONSE" | jq -r \
+            '.[].service | select(
+              (.name | gsub(" "; "-") | gsub("#"; "") | ascii_downcase) |
+              endswith("pr-'"${PR_NUMBER}"'")
+            ) | .id' | head -1)
+
+            if [ -n "$SERVICE_ID" ]; then
+              echo "Found service: $SERVICE_ID"
+              echo "service_id=$SERVICE_ID" >> "$GITHUB_OUTPUT"
+              break
+            fi
+
+            echo "Service not found yet, retrying in ${SLEEP_SECONDS}s..."
+            sleep "$SLEEP_SECONDS"
+          done
+
+          if [ -z "$SERVICE_ID" ]; then
+            echo "ERROR: Could not find Render preview service for PR #${PR_NUMBER}"
+            exit 1
+          fi
+
+      - name: Wait for Render deployment to complete
+        id: render_deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ steps.render_service.outputs.service_id }}
+          TIMEOUT_SECONDS: "900"
+          SLEEP_SECONDS: "15"
+        run: |
+          set -euo pipefail
+          end=$((SECONDS + TIMEOUT_SECONDS))
+          DEPLOY_ID=""
+          DEPLOY_STATUS=""
+
+          # Wait for an in-progress or recent deploy to appear
+          echo "Waiting for active deployment on service: $SERVICE_ID"
+          while [ $SECONDS -lt $end ]; do
+            RESPONSE=$(curl -fsSL \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys?limit=5")
+
+            DEPLOY_ID=$(echo "$RESPONSE" | jq -r \
+              '[.[] | select(.deploy.status == "build_in_progress" or .deploy.status == "update_in_progress")] | first | .deploy.id // empty')
+
+            if [ -n "$DEPLOY_ID" ]; then
+              echo "Found active deployment: $DEPLOY_ID"
+              break
+            fi
+
+            echo "No active deployment yet, retrying in ${SLEEP_SECONDS}s..."
+            sleep "$SLEEP_SECONDS"
+          done
+
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "ERROR: No active deployment found within timeout"
+            exit 1
+          fi
+
+          # Poll until deployment finishes
+          echo "Polling deployment $DEPLOY_ID for completion..."
+          while [ $SECONDS -lt $end ]; do
+            RESPONSE=$(curl -fsSL \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}")
+
+            echo "Deployment status response: $RESPONSE"
+
+            DEPLOY_STATUS=$(echo "$RESPONSE" | jq -r '.deploy.status')
+            echo "Deployment status: $DEPLOY_STATUS"
+
+            case "$DEPLOY_STATUS" in
+              live)
+                echo "Deployment succeeded!"
+                echo "deploy_status=live" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              build_failed|update_failed|canceled|deactivated)
+                echo "ERROR: Deployment failed with status: $DEPLOY_STATUS"
+                exit 1
+                ;;
+              *)
+                echo "Still in progress, retrying in ${SLEEP_SECONDS}s..."
+                sleep "$SLEEP_SECONDS"
+                ;;
+            esac
+          done
+
+          echo "ERROR: Deployment did not complete within timeout"
+          exit 1
