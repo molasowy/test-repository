@@ -1,0 +1,21 @@
+name: Build application with tests
+
+on: [push, workflow_dispatch]
+
+jobs:
+ build_application_with_tests:
+   name: Test workflow
+   runs-on: ubuntu-latest
+   steps:
+     - name: Checkout the latest Git commit
+       uses: actions/checkout@v4
+       with:
+         fetch-depth: 0
+     - name: Setup JDK
+       uses: actions/setup-java@v4
+       with:
+        java-version: '17'
+        distribution: 'temurin'
+     - name: Build application with tests
+       run: ./gradlew clean test
+
