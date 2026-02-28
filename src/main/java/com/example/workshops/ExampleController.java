@@ -11,4 +11,9 @@ public class ExampleController {
         return "Hello world from Preview Deployment2!";
     }
 
+    @GetMapping("/hello")
+    public String helloAgain() {
+        return "Hello again!";
+    }
+
 }
