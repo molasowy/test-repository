@@ -1,11 +1,7 @@
 services:
   - type: web
-    name: spring-boot-backend
+    name: workshops
     runtime: docker
-    plan: starter
-    region: frankfurt
     autoDeploy: false
-    dockerfilePath: ./Dockerfile
-    envVars:
-      - key: SPRING_PROFILES_ACTIVE
-        value: prod
+    previews:
+      generation: automatic

@@ -4,7 +4,7 @@ on: [push, workflow_dispatch]
 
 jobs:
  build_application_with_tests:
-   name: Test workflow
+   name: CI workflow
    runs-on: ubuntu-latest
    steps:
      - name: Checkout the latest Git commit
