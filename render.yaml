@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: workshops
+    runtime: docker
+    autoDeploy: false
+    previews:
+      generation: automatic
